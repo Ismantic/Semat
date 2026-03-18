@@ -276,4 +276,3 @@ $$\text{Perplexity} = \exp\left(-\frac{\log P(\text{全部词语})}{\text{总词
 
 注意：当前这个实现不是严格意义上的Likelihood函数，只是用来评价当前训练是否收敛来用。
 
-## Implementation
