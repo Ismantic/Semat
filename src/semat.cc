@@ -41,7 +41,7 @@ private:
     std::vector<int> nmsum;
 
     float s_;
-    int cnt_;
+    int cnt_ = 0;
 
     std::vector<std::mt19937> G;
     std::vector<std::uniform_real_distribution<float>> D;
@@ -230,7 +230,6 @@ public:
         auto start = std::chrono::high_resolution_clock::now();
 
         int doc_block_size = (M + num_cores - 1)/num_cores;
-        int token_block_size = (V + num_cores - 1)/num_cores;
 
         for (int iter = 0; iter < iterations; iter++) {
             if (iter % 10 == 0) {
@@ -249,18 +248,29 @@ public:
 
                         int doc_start = doc_block_id * doc_block_size;
                         int doc_end = std::min(doc_start+doc_block_size, M);
-                        int token_start = token_block_id * token_block_size;
-                        int token_end = std::min(token_start+token_block_size, V);
 
                         for (int m = doc_start; m < doc_end; m++) {
-                            for (int i = 0; i < data[m].size(); i++) {
+                            for (int i = 0; i < static_cast<int>(data[m].size()); i++) {
                                 int w = data[m][i];
 
-                                if (w >= token_start && w < token_end) {
+                                if (w % num_cores == token_block_id) {
                                     int ot = Z[m][i];
+                                    // Decrement before sampling (correct CGS)
+                                    nv[w][ot]--;
+                                    if (nv[w][ot] == 0) nv[w].erase(ot);
+                                    nm[m][ot]--;
+                                    if (nm[m][ot] == 0) nm[m].erase(ot);
+                                    nvsum[ot]--;
+                                    nmsum[m]--;
+
                                     int nt = SparseSample(t, m, w);
                                     Z[m][i] = nt;
-                                    UpdateCount(m, w, ot, nt);
+
+                                    // Increment new topic
+                                    nv[w][nt]++;
+                                    nm[m][nt]++;
+                                    nvsum[nt]++;
+                                    nmsum[m]++;
                                 }
                             }
                         }
@@ -273,10 +283,10 @@ public:
             }
 
             if ((iter + 1)%10 == 0 || iter == iterations -1) {
-                float r = LogLikelihood();
-                float token_count = cnt_;
+                double r = LogLikelihood();
+                double token_count = cnt_;
                 if (token_count > 0) {
-                    float p = std::exp(-r/token_count);
+                    double p = std::exp(-r/token_count);
 
                     int active_count = 0;
                     for (int k = 0; k < K; k++) {
@@ -297,29 +307,26 @@ public:
                   << elapsed.count() << " seconds " << std::endl;
     }
 
-    float LogLikelihood() {
-        float r = 0.0;
+    double LogLikelihood() {
+        double r = 0.0;
         for (int m = 0; m < M; m++) {
-            for (int i = 0; i < data[m].size(); i++) {
+            for (int i = 0; i < static_cast<int>(data[m].size()); i++) {
                 int w = data[m][i];
                 int t = Z[m][i];
-                // P(t/m) = (m_mt + a) / (n_m + Ka)
                 int n_mt = 0;
                 auto it_nm = nm[m].find(t);
                 if (it_nm != nm[m].end()) {
                     n_mt = it_nm->second;
                 }
-                float p_t_given_m = (n_mt + alpha) /(nmsum[m] + K*alpha);
+                double p_t_given_m = (n_mt + alpha) / (nmsum[m] + K * alpha);
 
-                // P(w|t) = (n_wt + b) / (n_t + Vb)
                 int n_wt = 0;
                 auto it_nv = nv[w].find(t);
                 if (it_nv != nv[w].end()) {
                     n_wt = it_nv->second;
                 }
-                float p_w_given_t = (n_wt + beta) / (nvsum[t] + V*beta);
+                double p_w_given_t = (n_wt + beta) / (nvsum[t] + V * beta);
 
-                // log P(w|m) = log P(t|m) + log(w|t)
                 r += std::log(p_t_given_m) + std::log(p_w_given_t);
             }
         }
