@@ -5,11 +5,12 @@ Sparse Efficient Model Allocation Topic — 基于 SparseLDA + N-Queen 多线程
 ## 特性
 
 - **SparseLDA 采样**：将采样概率分解为 s/r/q 三个桶，降低采样复杂度
-- **N-Queen 并行**：文档-词汇分块调度，无锁多线程 Gibbs 采样
+- **N-Queen 并行**：文档-词汇分块调度（modulo 分配），无锁多线程 Gibbs 采样
 - **稀疏计数**：使用 `unordered_map` 存储计数矩阵，适合大规模稀疏数据
+- **KMeans 初始化**：支持从词向量聚类结果初始化 topic 分配，加速收敛
 - **Perplexity 监控**：训练过程中输出困惑度，评估模型收敛
 
-详细的算法原理见 [LDA.md](LDA.md)。
+详细的算法原理见 [LDA.md](LDA.md)，完整训练流程见 [docs/training-guide.md](docs/training-guide.md)。
 
 ## 构建
 
@@ -21,7 +22,7 @@ cmake --build build
 ## 使用
 
 ```bash
-./build/semat data.txt [topics] [iterations] [alpha] [beta] [num_cores]
+./build/semat data.txt [topics] [iterations] [alpha] [beta] [num_cores] [--init file]
 ```
 
 参数说明：
@@ -33,6 +34,21 @@ cmake --build build
 | `alpha` | 0.1 | 文档-主题先验 |
 | `beta` | 0.01 | 主题-词语先验 |
 | `num_cores` | CPU核数/2 | 线程数 |
+| `--init` | 无 | 词-主题初始化文件（词 topic_id，一行一个） |
+
+### 示例
+
+基本训练：
+
+```bash
+./build/semat corpus.txt 128 150 0.1 0.01 16
+```
+
+带 KMeans 初始化：
+
+```bash
+./build/semat corpus.txt 128 150 0.1 0.01 16 --init word_topic_init.txt
+```
 
 ### 输入文件格式
 
@@ -51,6 +67,22 @@ cmake --build build
 - `semat.vocab` — 词汇表
 - `semat.phi` — 主题-词语分布（每个主题的 top 词语及概率）
 - `semat.theta` — 文档-主题分布
+
+## 工具
+
+### TF-IDF 语料加权
+
+```bash
+python3 scripts/tfidf_reweight.py <input> <output> [--threshold 1]
+```
+
+对语料进行 `log10(TF) * log10(N/DF)` 加权，压制高频通用词，突出有区分度的词。
+
+### 主题查看
+
+```bash
+python3 scripts/show_topics.py semat.phi [topn=30]
+```
 
 ## License
 
