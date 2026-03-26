@@ -6,3 +6,8 @@ build/
 *.vocab
 *.phi
 *.theta
+!data/semat.phi
+
+# Intermediate data
+corpus_tfidf.txt
+word_topic_init.txt

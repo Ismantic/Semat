@@ -101,12 +101,35 @@ public:
         return true;
     }
 
-    void Init() {
+    void Init(const std::string& init_file = "") {
         nv.resize(V);
         nm.resize(M);
         nvsum.resize(K, 0);
         nmsum.resize(M, 0);
         Z.resize(M);
+
+        // Load word->topic mapping if provided
+        std::unordered_map<int, int> word_topic;
+        if (!init_file.empty()) {
+            std::ifstream fin(init_file);
+            if (!fin.is_open()) {
+                std::cerr << "Warning: cannot open init file " << init_file
+                          << ", falling back to random init" << std::endl;
+            } else {
+                std::string w;
+                int t;
+                int loaded = 0;
+                while (fin >> w >> t) {
+                    auto it = dict_map.find(w);
+                    if (it != dict_map.end() && t >= 0 && t < K) {
+                        word_topic[it->second] = t;
+                        loaded++;
+                    }
+                }
+                std::cout << "Init: loaded " << loaded << "/" << V
+                          << " word-topic mappings from " << init_file << std::endl;
+            }
+        }
 
         std::uniform_int_distribution<int> T(0, K-1);
 
@@ -116,7 +139,13 @@ public:
 
             for (int i = 0; i < N; i++) {
                 int w = data[m][i];
-                int t = T(G[0]);
+                int t;
+                auto it = word_topic.find(w);
+                if (it != word_topic.end()) {
+                    t = it->second;
+                } else {
+                    t = T(G[0]);
+                }
                 Z[m][i] = t;
 
                 nv[w][t]++;
@@ -404,7 +433,8 @@ public:
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0]
-                  << "data_file [topics=128] [iters=10] [a=0.1] [b=0.01] [num_cores=8]";
+                  << " data_file [topics=128] [iters=10] [a=0.1] [b=0.01] [num_cores=8] [--init file]"
+                  << std::endl;
         return 1;
     }
 
@@ -415,15 +445,22 @@ int main(int argc, char* argv[]) {
     float beta = (argc > 5) ? std::stof(argv[5]) : 0.01F;
     int num_cores = (argc > 6) ? std::stoi(argv[6]) : std::thread::hardware_concurrency()/2;
 
-    semat::Semat se(topics, alpha, beta, iters, num_cores); 
+    std::string init_file;
+    for (int i = 1; i < argc - 1; i++) {
+        if (std::string(argv[i]) == "--init") {
+            init_file = argv[i + 1];
+        }
+    }
+
+    semat::Semat se(topics, alpha, beta, iters, num_cores);
 
     if (!se.LoadCorpus(filename)) {
         return 1;
     }
 
-    se.Init();
+    se.Init(init_file);
     se.RunSample();
-    se.SaveModel("semat"); 
+    se.SaveModel("semat");
 
     return 0;
 }
