@@ -11,3 +11,7 @@ build/
 # Intermediate data
 corpus_tfidf.txt
 word_topic_init.txt
+
+# Docs
+LDA.md
+docs/

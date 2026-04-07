@@ -2,8 +2,8 @@
 """Corpus processing tools for Semat.
 
 Commands:
-  vocab   - Count document frequency (DF) for each word
-  tfidf   - TF-IDF reweight corpus with filtering
+  count  - Count document frequency (DF) for each word
+  conv  - TF-IDF reweight corpus with filtering
 """
 
 import sys
@@ -46,7 +46,7 @@ def tfidf(seg_file, vocab_file, output_file, min_df=10, min_len=2, min_score=2.0
       - score < min_score: drop
       - unique words in doc < min_uniq: drop doc
     """
-    # Load DF from vocab file
+    # Load DF from countfile
     df = {}
     with open(vocab_file) as f:
         for line in f:
@@ -97,21 +97,21 @@ def tfidf(seg_file, vocab_file, output_file, min_df=10, min_len=2, min_score=2.0
 def main():
     if len(sys.argv) < 2:
         print("Usage:", file=sys.stderr)
-        print(f"  {sys.argv[0]} vocab <seg_file> <output>", file=sys.stderr)
-        print(f"  {sys.argv[0]} tfidf <seg_file> <vocab_file> <output> [--min-df 10] [--min-len 2] [--min-score 1.0] [--min-uniq 10]", file=sys.stderr)
+        print(f"  {sys.argv[0]} count<seg_file> <output>", file=sys.stderr)
+        print(f"  {sys.argv[0]} conv<seg_file> <vocab_file> <output> [--min-df 10] [--min-len 2] [--min-score 1.0] [--min-uniq 10]", file=sys.stderr)
         sys.exit(1)
 
     cmd = sys.argv[1]
 
-    if cmd == "vocab":
+    if cmd == "count":
         if len(sys.argv) < 4:
-            print(f"Usage: {sys.argv[0]} vocab <seg_file> <output>", file=sys.stderr)
+            print(f"Usage: {sys.argv[0]} count<seg_file> <output>", file=sys.stderr)
             sys.exit(1)
         vocab(sys.argv[2], sys.argv[3])
 
-    elif cmd == "tfidf":
+    elif cmd == "conv":
         if len(sys.argv) < 5:
-            print(f"Usage: {sys.argv[0]} tfidf <seg_file> <vocab_file> <output> [--min-df 10] [--min-len 2] [--min-score 1.0] [--min-uniq 10]", file=sys.stderr)
+            print(f"Usage: {sys.argv[0]} conv<seg_file> <vocab_file> <output> [--min-df 10] [--min-len 2] [--min-score 1.0] [--min-uniq 10]", file=sys.stderr)
             sys.exit(1)
         seg_file = sys.argv[2]
         vocab_file = sys.argv[3]
