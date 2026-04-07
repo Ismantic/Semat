@@ -21,7 +21,7 @@ cmake --build build
 
 将以下文件放入 `prepare/` 目录：
 
-- `News.cut.txt` — 分词后语料，每行一篇文章，词语空格分隔
+- `News.cut.txt` — 分词后语料，每行一篇文章，词语空格分隔，切词工具 [Iscut](https://github.com/Ismantic/Iscut)
 - `wavec.20260405.Kmeans.map` — 词向量聚类映射（`word\tclusterID`，来自 [Wavec](https://github.com/Ismantic/Wavec)）
 
 ## 使用
