@@ -35,41 +35,10 @@ make -C scripts fit      # 训练（若未转换则自动 conv）
 make -C scripts print    # 查看主题 top 词
 ```
 
-### 参数
-
-| 变量 | 默认值 | 说明 |
-|------|--------|------|
-| TOPICS | 100 | 主题数 K |
-| ITERS | 150 | 迭代次数 |
-| ALPHA | 0.1 | 文档-主题先验 |
-| BETA | 0.01 | 主题-词语先验 |
-| THREADS | 8 | 训练线程数 |
-| MIN_DF | 10 | 最低文档频率 |
-| MIN_LEN | 2 | 最少字符数 |
-| MIN_SCORE | 2.0 | 最低 TF-IDF 分数 |
-| MIN_UNIQ | 10 | 文档最少唯一词数 |
-| TOPN | 30 | 每主题显示词数 |
-
 ```bash
 make -C scripts fit TOPICS=128 ITERS=200 THREADS=16
 make -C scripts conv MIN_DF=20 MIN_SCORE=3.0
 ```
-
-### semat 参数
-
-```bash
-./build/semat <data_file> [topics] [iters] [alpha] [beta] [num_cores] [--init file] [--output name]
-```
-
-| 参数 | 默认值 | 说明 |
-|------|--------|------|
-| `topics` | 128 | 主题数 K |
-| `iters` | 10 | 迭代次数 |
-| `alpha` | 0.1 | 文档-主题先验 |
-| `beta` | 0.01 | 主题-词语先验 |
-| `num_cores` | CPU核数/2 | 线程数 |
-| `--init` | 无 | 词-主题初始化文件（`word topic_id`，一行一个） |
-| `--output` | semat | 输出文件路径前缀 |
 
 ### 输出文件
 
