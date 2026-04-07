@@ -446,9 +446,12 @@ int main(int argc, char* argv[]) {
     int num_cores = (argc > 6) ? std::stoi(argv[6]) : std::thread::hardware_concurrency()/2;
 
     std::string init_file;
+    std::string output_name = "semat";
     for (int i = 1; i < argc - 1; i++) {
         if (std::string(argv[i]) == "--init") {
             init_file = argv[i + 1];
+        } else if (std::string(argv[i]) == "--output") {
+            output_name = argv[i + 1];
         }
     }
 
@@ -460,7 +463,7 @@ int main(int argc, char* argv[]) {
 
     se.Init(init_file);
     se.RunSample();
-    se.SaveModel("semat");
+    se.SaveModel(output_name);
 
     return 0;
 }
