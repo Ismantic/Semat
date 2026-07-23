@@ -65,6 +65,11 @@ python3 scripts/process.py conv <seg_file> <vocab> <output> # TF-IDF 加权
 python3 scripts/print_topics.py <phi_file> [topn=30]
 ```
 
+## 原理文档
+
+LDA、SparseLDA 三桶采样、N-Queen 调度与困惑度的原理讲解见《底层实现：文本处理》的
+[番外篇：LDA 与 SparseLDA](https://ismantic.github.io/text/semat.html)。
+
 ## License
 
 MIT
