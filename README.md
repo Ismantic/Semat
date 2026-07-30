@@ -1,7 +1,9 @@
 # Semat
 
-Semat（Sparse Efficient Model Allocation Topic）是一个面向教学和中文新闻实验的
-C++17 LDA 实现。核心算法采用 SparseLDA 的 s/r/q 三桶采样，并通过 N-Queen
+[English](README_EN.md) | 中文
+
+Semat（Sparse Efficient Model Allocation Topic）是一个兼具简洁与实用的
+C++17 LDA 实现。核心算法采用 SparseLDA 的 S/R/Q 三桶采样，并通过 N-Queen
 文档—词汇分块并行执行 Gibbs 采样。
 
 ## 特性
@@ -13,14 +15,14 @@ C++17 LDA 实现。核心算法采用 SparseLDA 的 s/r/q 三桶采样，并通�
 - 训练困惑度和活跃主题监控
 - `.vocab`、`.phi`、`.theta` 模型输出
 
-## 数据与训练流程
+## 流程
 
-Semat 与 [Wavec](https://github.com/Ismantic/Wavec) 使用相同的 THUCNews 数据源和
+Semat 与 [Wavec](https://github.com/Ismantic/Wavec) 使用相同的数据源和
 Wapic 分词器，但训练单位不同：Wavec 的 CBOW 输入是一行一句，Semat 的输入必须
 保持一行一篇文章。
 
 ```text
-THUCNews Parquet
+News Parquet
   → 合并标题和正文（一行一篇文章）
   → Wapic 文档级分词
   → DF 统计和 TF-IDF 重加权
@@ -68,7 +70,7 @@ make -C scripts fit INIT=/path/to/clusters.map TOPICS=100
 
 映射不存在时流程会停止；请先在 Wavec 中完成词向量训练、过滤和 K-means。
 
-## 完整运行
+## 运行
 
 确认 Wavec 映射存在后，一条命令完成 Semat 的数据下载、文档转换、分词、过滤、
 训练和主题打印：
@@ -97,7 +99,23 @@ make -C scripts print TOPN=30
 路径和本机参数可通过 `RAW_CORPUS`、`SEG_FILE`、`TRAIN_CORPUS`、`OUTPUT` 或
 忽略提交的 `local.mk` 覆盖。
 
-## 直接调用
+## Topic 示例
+
+以下是使用 THUCNews、100 个主题和 150 轮采样得到的部分 top 词：
+
+| 主题 | Top words |
+|---|---|
+| 影视 | 导演、演员、春晚、明星、剧组、电影、赵本山、华谊、微博、拍摄 |
+| 篮球 | 火箭、球队、湖人、赛季、科比、球员、篮板、詹姆斯、热火、火箭队 |
+| 教育考试 | 考生、招生、高考、录取、考试、学校、学生、高校、志愿、报考 |
+| 医疗 | 医院、医生、手术、医疗、治疗、检查、药品、死亡、抢救、卫生 |
+| 房地产 | 项目、房地产、城市、平方米、土地、面积、房价、地产、开发商、住宅 |
+| 金融市场 | 指数、板块、上涨、下跌、反弹、市场、股市、涨幅、震荡、资金 |
+
+实际结果取决于语料、聚类初始化和随机采样；topic ID 与词语顺序不保证在不同训练间
+完全一致。
+
+## 调用
 
 ```bash
 ./build/semat <corpus> <topics> <iters> <alpha> <beta> <threads> \
@@ -123,7 +141,7 @@ ctest --test-dir build --output-on-failure
 冒烟测试使用临时文档，覆盖 DF 统计、TF-IDF 转换、聚类初始化、多线程训练、模型
 输出和主题打印，不需要下载 THUCNews。
 
-## 实现说明
+## 说明
 
 训练器会把压缩后的语料载入内存。N-Queen 调度避免线程同时修改同一文档或同一词，
 共享主题总计数使用原子操作。困惑度用于观察训练趋势；正式模型质量还应结合主题词
