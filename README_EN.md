@@ -110,12 +110,12 @@ sampling iterations:
 
 | Topic | Top words |
 |---|---|
-| Film and TV | 导演, 演员, 春晚, 明星, 剧组, 电影, 赵本山, 华谊, 微博, 拍摄 |
-| Basketball | 火箭, 球队, 湖人, 赛季, 科比, 球员, 篮板, 詹姆斯, 热火, 火箭队 |
-| Education | 考生, 招生, 高考, 录取, 考试, 学校, 学生, 高校, 志愿, 报考 |
-| Healthcare | 医院, 医生, 手术, 医疗, 治疗, 检查, 药品, 死亡, 抢救, 卫生 |
-| Real estate | 项目, 房地产, 城市, 平方米, 土地, 面积, 房价, 地产, 开发商, 住宅 |
-| Financial markets | 指数, 板块, 上涨, 下跌, 反弹, 市场, 股市, 涨幅, 震荡, 资金 |
+| Topic 13 | 导演, 演员, 春晚, 明星, 剧组, 电影, 赵本山, 华谊, 微博, 拍摄 |
+| Topic 20 | 火箭, 球队, 湖人, 赛季, 科比, 球员, 篮板, 詹姆斯, 热火, 火箭队 |
+| Topic 73 | 考生, 招生, 高考, 录取, 考试, 学校, 学生, 高校, 志愿, 报考 |
+| Topic 97 | 医院, 医生, 手术, 医疗, 治疗, 检查, 药品, 死亡, 抢救, 卫生 |
+| Topic 83 | 项目, 房地产, 城市, 平方米, 土地, 面积, 房价, 地产, 开发商, 住宅 |
+| Topic 77 | 指数, 板块, 上涨, 下跌, 反弹, 市场, 股市, 涨幅, 震荡, 资金 |
 
 Results depend on the corpus, cluster initialization, and random sampling.
 Topic IDs and word order are not guaranteed to remain identical across runs.
