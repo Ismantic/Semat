@@ -8,3 +8,15 @@ find_package(Threads REQUIRED)
 
 add_executable(semat src/semat.cc)
 target_link_libraries(semat Threads::Threads)
+
+include(CTest)
+if(BUILD_TESTING)
+    find_package(Python3 COMPONENTS Interpreter REQUIRED)
+    add_test(
+        NAME smoke
+        COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/smoke.py
+                $<TARGET_FILE:semat> ${CMAKE_SOURCE_DIR}/scripts/process.py
+                ${CMAKE_SOURCE_DIR}/scripts/print_topics.py
+                ${CMAKE_SOURCE_DIR}/data/process.py
+    )
+endif()

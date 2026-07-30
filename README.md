@@ -1,75 +1,136 @@
 # Semat
 
-Sparse Efficient Model Allocation Topic — 基于 SparseLDA + N-Queen 多线程调度的 LDA 主题模型实现。
+Semat（Sparse Efficient Model Allocation Topic）是一个面向教学和中文新闻实验的
+C++17 LDA 实现。核心算法采用 SparseLDA 的 s/r/q 三桶采样，并通过 N-Queen
+文档—词汇分块并行执行 Gibbs 采样。
 
 ## 特性
 
-- **SparseLDA 采样**：将采样概率分解为 s/r/q 三个桶，降低采样复杂度
-- **N-Queen 并行**：文档-词汇分块调度（modulo 分配），无锁多线程 Gibbs 采样
-- **稀疏计数**：使用 `unordered_map` 存储计数矩阵，适合大规模稀疏数据
-- **KMeans 初始化**：支持从词向量聚类结果初始化 topic 分配，加速收敛
-- **Perplexity 监控**：训练过程中输出困惑度，评估模型收敛
+- 稀疏文档—主题和词—主题计数
+- N-Queen 多线程调度
+- Wavec 词向量 K-means 初始化
+- 文档级 TF-IDF 语料压缩
+- 训练困惑度和活跃主题监控
+- `.vocab`、`.phi`、`.theta` 模型输出
 
-## 构建
+## 数据与训练流程
 
-```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build
+Semat 与 [Wavec](https://github.com/Ismantic/Wavec) 使用相同的 THUCNews 数据源和
+Wapic 分词器，但训练单位不同：Wavec 的 CBOW 输入是一行一句，Semat 的输入必须
+保持一行一篇文章。
+
+```text
+THUCNews Parquet
+  → 合并标题和正文（一行一篇文章）
+  → Wapic 文档级分词
+  → DF 统计和 TF-IDF 重加权
+  → 使用 Wavec K-means 映射初始化 topic
+  → SparseLDA / N-Queen 训练
 ```
 
-## 数据准备
+`data/download.py` 从 Hugging Face 的 `SirlyDreamer/THUCNews` 下载数据，
+`data/process.py` 生成 `data/derived/THUCNews.documents.txt`。预处理过程中始终
+保留文档边界。
 
-将以下文件放入 `prepare/` 目录：
+## 环境与构建
 
-- `News.cut.txt` — 分词后语料，每行一篇文章，词语空格分隔，切词工具 [Iscut](https://github.com/Ismantic/Iscut)
-- `wavec.20260405.Kmeans.map` — 词向量聚类映射（`word\tclusterID`，来自 [Wavec](https://github.com/Ismantic/Wavec)）
-
-## 使用
-
-通过 `scripts/Makefile` 驱动完整流程：
+需要 CMake 3.14+、C++17 编译器和 Python 3.9+。
 
 ```bash
-make -C scripts count    # 统计词频（DF）
-make -C scripts conv     # TF-IDF 加权转换（若未统计则自动 count）
-make -C scripts fit      # 训练（若未转换则自动 conv）
-make -C scripts print    # 查看主题 top 词
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
 ```
+
+构建产物为 `build/semat`。
+
+## Wavec 初始化
+
+训练前必须准备与主题数一致的 Wavec K-means 映射。默认读取相邻仓库中的纯中文
+100 类映射：
+
+```text
+../Wavec/data/wavec.20260405.Kmeans.map
+```
+
+映射格式可以是 `word cluster_id` 或 `word<TAB>cluster_id`。Semat 会检查映射覆盖
+的聚类数是否等于 `TOPICS`，并在 TF-IDF 阶段仅保留映射词表内的词，避免数字、
+URL 和代码形成无效主题。
+
+使用其他 Wavec 仓库或映射时传入：
 
 ```bash
-make -C scripts fit TOPICS=128 ITERS=200 THREADS=16
-make -C scripts conv MIN_DF=20 MIN_SCORE=3.0
+make -C scripts fit WAVEC_ROOT=/path/to/Wavec
+make -C scripts fit INIT=/path/to/clusters.map TOPICS=100
 ```
 
-### 输出文件
+映射不存在时流程会停止；请先在 Wavec 中完成词向量训练、过滤和 K-means。
 
-训练完成后生成三个文件：
+## 完整运行
 
-- `<output>.vocab` — 词汇表
-- `<output>.phi` — 主题-词语分布（每个主题的 top 词语及概率）
-- `<output>.theta` — 文档-主题分布
-
-## 工具
-
-### process.py — 语料处理
+确认 Wavec 映射存在后，一条命令完成 Semat 的数据下载、文档转换、分词、过滤、
+训练和主题打印：
 
 ```bash
-python3 scripts/process.py count <seg_file> <output>       # 统计 DF
-python3 scripts/process.py conv <seg_file> <vocab> <output> # TF-IDF 加权
+make -C scripts all NPROC=8 THREADS=8
 ```
 
-`conv` 对每个文档中的词计算 `score = log(TF) * log(N/DF)`，按分数重复词语，过滤低质量词和文档。
-
-### print_topics.py — 主题查看
+也可以逐阶段执行：
 
 ```bash
-python3 scripts/print_topics.py <phi_file> [topn=30]
+make -C scripts data
+make -C scripts cut NPROC=8
+make -C scripts count
+make -C scripts conv MIN_DF=10 MIN_LEN=2 MIN_SCORE=2.0 MIN_UNIQ=10
+make -C scripts fit TOPICS=100 ITERS=150 THREADS=8
+make -C scripts print TOPN=30
 ```
 
-## 原理文档
+默认输出位于：
 
-LDA、SparseLDA 三桶采样、N-Queen 调度与困惑度的原理讲解见《底层实现：文本处理》的
-[番外篇：LDA 与 SparseLDA](https://ismantic.github.io/text/semat.html)。
+- `scripts/output/semat.vocab`：训练词表
+- `scripts/output/semat.phi`：每个主题的词概率
+- `scripts/output/semat.theta`：每篇文档的主题概率
+
+路径和本机参数可通过 `RAW_CORPUS`、`SEG_FILE`、`TRAIN_CORPUS`、`OUTPUT` 或
+忽略提交的 `local.mk` 覆盖。
+
+## 直接调用
+
+```bash
+./build/semat <corpus> <topics> <iters> <alpha> <beta> <threads> \
+  --init <clusters.map> --output <prefix>
+```
+
+例如：
+
+```bash
+./build/semat scripts/News.dat.txt 100 150 0.1 0.01 8 \
+  --init ../Wavec/data/wavec.20260405.Kmeans.map \
+  --output scripts/output/semat
+```
+
+## 测试
+
+```bash
+make -C scripts test
+# 或
+ctest --test-dir build --output-on-failure
+```
+
+冒烟测试使用临时文档，覆盖 DF 统计、TF-IDF 转换、聚类初始化、多线程训练、模型
+输出和主题打印，不需要下载 THUCNews。
+
+## 实现说明
+
+训练器会把压缩后的语料载入内存。N-Queen 调度避免线程同时修改同一文档或同一词，
+共享主题总计数使用原子操作。困惑度用于观察训练趋势；正式模型质量还应结合主题词
+可读性和下游任务评估。
+
+算法说明见[番外篇：LDA 与 SparseLDA](https://ismantic.github.io/text/semat.html)。
 
 ## License
 
-MIT
+MIT。THUCNews、Wapic 和 Wavec 的许可条件请参考各自上游项目。

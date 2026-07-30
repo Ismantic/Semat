@@ -7,8 +7,7 @@
 #include <chrono>
 #include <thread>
 #include <algorithm>
-//#include <memory>
-//#include <atomic>
+#include <atomic>
 
 #include <math.h>
 #include <stdint.h>
@@ -37,7 +36,7 @@ private:
 
     std::vector<std::unordered_map<int, int>> nv;
     std::vector<std::unordered_map<int, int>> nm;
-    std::vector<int> nvsum;
+    std::vector<std::atomic<int>> nvsum;
     std::vector<int> nmsum;
 
     float s_;
@@ -98,37 +97,53 @@ public:
         std::cout << "Corpus Load: " << M << " documents, "
                   << V << " vocabulary size, using "
                   << num_cores << " Cpu cores." << std::endl;
+        if (M == 0 || V == 0) {
+            std::cerr << "Corpus contains no documents or tokens." << std::endl;
+            return false;
+        }
         return true;
     }
 
-    void Init(const std::string& init_file = "") {
+    bool Init(const std::string& init_file) {
         nv.resize(V);
         nm.resize(M);
-        nvsum.resize(K, 0);
+        nvsum = std::vector<std::atomic<int>>(K);
+        for (auto& count : nvsum) {
+            count.store(0, std::memory_order_relaxed);
+        }
         nmsum.resize(M, 0);
         Z.resize(M);
 
         // Load word->topic mapping if provided
         std::unordered_map<int, int> word_topic;
-        if (!init_file.empty()) {
-            std::ifstream fin(init_file);
-            if (!fin.is_open()) {
-                std::cerr << "Warning: cannot open init file " << init_file
-                          << ", falling back to random init" << std::endl;
-            } else {
-                std::string w;
-                int t;
-                int loaded = 0;
-                while (fin >> w >> t) {
-                    auto it = dict_map.find(w);
-                    if (it != dict_map.end() && t >= 0 && t < K) {
-                        word_topic[it->second] = t;
-                        loaded++;
-                    }
+        std::ifstream fin(init_file);
+        if (!fin.is_open()) {
+            std::cerr << "Cannot open init file: " << init_file << std::endl;
+            return false;
+        }
+
+        std::vector<bool> seen_topics(K, false);
+        std::string w;
+        int t;
+        int loaded = 0;
+        while (fin >> w >> t) {
+            auto it = dict_map.find(w);
+            if (it != dict_map.end() && t >= 0 && t < K) {
+                if (word_topic.emplace(it->second, t).second) {
+                    loaded++;
                 }
-                std::cout << "Init: loaded " << loaded << "/" << V
-                          << " word-topic mappings from " << init_file << std::endl;
+                seen_topics[t] = true;
             }
+        }
+        int mapped_topics = std::count(
+            seen_topics.begin(), seen_topics.end(), true);
+        std::cout << "Init: loaded " << loaded << "/" << V
+                  << " word-topic mappings across " << mapped_topics << "/"
+                  << K << " topics from " << init_file << std::endl;
+        if (mapped_topics != K) {
+            std::cerr << "Init mapping topic count does not match requested "
+                      << "topics." << std::endl;
+            return false;
         }
 
         std::uniform_int_distribution<int> T(0, K-1);
@@ -150,17 +165,18 @@ public:
 
                 nv[w][t]++;
                 nm[m][t]++;
-                nvsum[t]++;
+                nvsum[t].fetch_add(1, std::memory_order_relaxed);
                 nmsum[m]++;
                 cnt_ += 1;
             }
         }
+        return true;
     }
 
     void UpdateCache() {
         s_ = 0.0;
         for (int t = 0; t < K; t++) {
-            s_ += alpha*beta/(nvsum[t] + beta*V);
+            s_ += alpha*beta/(nvsum[t].load(std::memory_order_relaxed) + beta*V);
         }
     }
 
@@ -171,7 +187,8 @@ public:
         for (const auto& kv : nm[m]) {
             int t = kv.first;
             int nt_m = kv.second;
-            r += nt_m * beta /(nvsum[t] + beta*V);
+            r += nt_m * beta /
+                 (nvsum[t].load(std::memory_order_relaxed) + beta*V);
         }
 
         float q = 0.0;
@@ -185,7 +202,8 @@ public:
                 nt_m = it->second;
             }
 
-            q += (alpha + nt_m) * nw_t / (nvsum[t] + beta*V);
+            q += (alpha + nt_m) * nw_t /
+                 (nvsum[t].load(std::memory_order_relaxed) + beta*V);
         }
 
         float a = s + r + q;
@@ -195,7 +213,8 @@ public:
             float e = u;
             float cum = 0.0;
             for (int t = 0; t < K; t++) {
-                cum += alpha*beta / (nvsum[t] + beta*V);
+                cum += alpha*beta /
+                       (nvsum[t].load(std::memory_order_relaxed) + beta*V);
                 if (e <= cum) {
                     return t;
                 }
@@ -206,7 +225,8 @@ public:
             for (const auto& kv : nm[m]) {
                 int t = kv.first;
                 int nt_m = kv.second;
-                cum += nt_m*beta/(nvsum[t] + beta*V);
+                cum += nt_m*beta/
+                       (nvsum[t].load(std::memory_order_relaxed) + beta*V);
                 if (e <= cum) {
                     return t;
                 }
@@ -224,7 +244,8 @@ public:
                     nt_m = it->second;
                 }
 
-                cum += (alpha + nt_m) * nw_t / (nvsum[t] + beta*V);
+                cum += (alpha + nt_m) * nw_t /
+                       (nvsum[t].load(std::memory_order_relaxed) + beta*V);
                 if (e <= cum) {
                     return t;
                 }
@@ -251,8 +272,8 @@ public:
         }
         token_counts[nt]++;
 
-        nvsum[ot]--;
-        nvsum[nt]++;
+        nvsum[ot].fetch_sub(1, std::memory_order_relaxed);
+        nvsum[nt].fetch_add(1, std::memory_order_relaxed);
     }
 
     void RunSample() {
@@ -289,7 +310,8 @@ public:
                                     if (nv[w][ot] == 0) nv[w].erase(ot);
                                     nm[m][ot]--;
                                     if (nm[m][ot] == 0) nm[m].erase(ot);
-                                    nvsum[ot]--;
+                                    nvsum[ot].fetch_sub(
+                                        1, std::memory_order_relaxed);
                                     nmsum[m]--;
 
                                     int nt = SparseSample(t, m, w);
@@ -298,7 +320,8 @@ public:
                                     // Increment new topic
                                     nv[w][nt]++;
                                     nm[m][nt]++;
-                                    nvsum[nt]++;
+                                    nvsum[nt].fetch_add(
+                                        1, std::memory_order_relaxed);
                                     nmsum[m]++;
                                 }
                             }
@@ -312,21 +335,18 @@ public:
             }
 
             if ((iter + 1)%10 == 0 || iter == iterations -1) {
-                double r = LogLikelihood();
-                double token_count = cnt_;
-                if (token_count > 0) {
-                    double p = std::exp(-r/token_count);
-
-                    int active_count = 0;
-                    for (int k = 0; k < K; k++) {
-                        if (nvsum[k] > 0) active_count++;
+                double p = Perplexity();
+                int active_count = 0;
+                for (int k = 0; k < K; k++) {
+                    if (nvsum[k].load(std::memory_order_relaxed) > 0) {
+                        active_count++;
                     }
-
-                    std::cout << "Iteration " << iter + 1
-                              << ": Perplexity = " << p 
-                              << ", Active topics = " << active_count << "/" << K 
-                              << std::endl;
                 }
+
+                std::cout << "Iteration " << iter + 1
+                          << ": Perplexity = " << p
+                          << ", Active topics = " << active_count << "/" << K
+                          << std::endl;
             }
         }
 
@@ -336,30 +356,40 @@ public:
                   << elapsed.count() << " seconds " << std::endl;
     }
 
-    double LogLikelihood() {
-        double r = 0.0;
+    double Perplexity() {
+        double log_likelihood = 0.0;
         for (int m = 0; m < M; m++) {
-            for (int i = 0; i < static_cast<int>(data[m].size()); i++) {
-                int w = data[m][i];
-                int t = Z[m][i];
+            double base = 0.0;
+            for (int t = 0; t < K; t++) {
                 int n_mt = 0;
                 auto it_nm = nm[m].find(t);
                 if (it_nm != nm[m].end()) {
                     n_mt = it_nm->second;
                 }
-                double p_t_given_m = (n_mt + alpha) / (nmsum[m] + K * alpha);
+                base += (n_mt + alpha) * beta /
+                        (nvsum[t].load(std::memory_order_relaxed) + V * beta);
+            }
 
-                int n_wt = 0;
-                auto it_nv = nv[w].find(t);
-                if (it_nv != nv[w].end()) {
-                    n_wt = it_nv->second;
+            for (int i = 0; i < static_cast<int>(data[m].size()); i++) {
+                int w = data[m][i];
+                double probability = base;
+                for (const auto& kv : nv[w]) {
+                    int t = kv.first;
+                    int n_wt = kv.second;
+                    int n_mt = 0;
+                    auto it_nm = nm[m].find(t);
+                    if (it_nm != nm[m].end()) {
+                        n_mt = it_nm->second;
+                    }
+                    probability += (n_mt + alpha) * n_wt /
+                                   (nvsum[t].load(std::memory_order_relaxed) +
+                                    V * beta);
                 }
-                double p_w_given_t = (n_wt + beta) / (nvsum[t] + V * beta);
-
-                r += std::log(p_t_given_m) + std::log(p_w_given_t);
+                probability /= nmsum[m] + K * alpha;
+                log_likelihood += std::log(probability);
             }
         }
-        return r;
+        return std::exp(-log_likelihood / cnt_);
     }
 
     void SaveModel(const std::string& name) {
@@ -371,7 +401,8 @@ public:
         
         std::ofstream phi_file(name + ".phi");
         for (int k = 0; k < K; k++) {
-            if (nvsum[k] == 0) continue; 
+            int topic_total = nvsum[k].load(std::memory_order_relaxed);
+            if (topic_total == 0) continue;
             
             phi_file << "Topic " << k << ":" << std::endl;
             
@@ -383,7 +414,7 @@ public:
                     count = it->second;
                 }
                 if (count > 0) { 
-                    float prob = (count + beta) / (nvsum[k] + V * beta);
+                    float prob = (count + beta) / (topic_total + V * beta);
                     word_probs.emplace_back(prob, dict_vec[w]);
                 }
             }
@@ -433,7 +464,8 @@ public:
 int main(int argc, char* argv[]) {
     if (argc < 2) {
         std::cerr << "Usage: " << argv[0]
-                  << " data_file [topics=128] [iters=10] [a=0.1] [b=0.01] [num_cores=8] [--init file]"
+                  << " data_file [topics=128] [iters=10] [a=0.1] [b=0.01]"
+                  << " [num_cores=8] --init file [--output prefix]"
                   << std::endl;
         return 1;
     }
@@ -444,6 +476,12 @@ int main(int argc, char* argv[]) {
     float alpha = (argc > 4) ? std::stof(argv[4]) : 0.1F;
     float beta = (argc > 5) ? std::stof(argv[5]) : 0.01F;
     int num_cores = (argc > 6) ? std::stoi(argv[6]) : std::thread::hardware_concurrency()/2;
+    if (topics < 1 || iters < 1 || alpha <= 0 || beta <= 0 ||
+        num_cores < 1) {
+        std::cerr << "Topics, iterations, alpha, beta, and cores must be "
+                  << "positive." << std::endl;
+        return 1;
+    }
 
     std::string init_file;
     std::string output_name = "semat";
@@ -455,13 +493,20 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    semat::Semat se(topics, alpha, beta, iters, num_cores);
+    if (init_file.empty()) {
+        std::cerr << "--init is required; generate a Wavec K-means mapping "
+                  << "first." << std::endl;
+        return 1;
+    }
 
+    semat::Semat se(topics, alpha, beta, iters, num_cores);
     if (!se.LoadCorpus(filename)) {
         return 1;
     }
 
-    se.Init(init_file);
+    if (!se.Init(init_file)) {
+        return 1;
+    }
     se.RunSample();
     se.SaveModel(output_name);
 

@@ -34,7 +34,16 @@ def vocab(seg_file, output_file):
     print(f"Done: {n_docs} docs, {len(df)} words -> {output_file}", file=sys.stderr)
 
 
-def tfidf(seg_file, vocab_file, output_file, min_df=10, min_len=2, min_score=2.0, min_uniq=10):
+def tfidf(
+    seg_file,
+    vocab_file,
+    output_file,
+    min_df=10,
+    min_len=2,
+    min_score=2.0,
+    min_uniq=10,
+    allowed_vocab=None,
+):
     """TF-IDF reweight corpus.
 
     For each word in each document:
@@ -58,6 +67,15 @@ def tfidf(seg_file, vocab_file, output_file, min_df=10, min_len=2, min_score=2.0
 
     # Filter vocab
     keep = {w for w, c in df.items() if c >= min_df and len(w) >= min_len}
+    if allowed_vocab:
+        with open(allowed_vocab) as f:
+            allowed = {parts[0] for line in f if (parts := line.split())}
+        keep.intersection_update(allowed)
+        print(
+            f"After Wavec vocabulary constraint ({allowed_vocab}): "
+            f"{len(keep)} words",
+            file=sys.stderr,
+        )
     print(f"After filter (min_df={min_df}, min_len={min_len}): {len(keep)} words", file=sys.stderr)
 
     total_before = 0
@@ -97,21 +115,21 @@ def tfidf(seg_file, vocab_file, output_file, min_df=10, min_len=2, min_score=2.0
 def main():
     if len(sys.argv) < 2:
         print("Usage:", file=sys.stderr)
-        print(f"  {sys.argv[0]} count<seg_file> <output>", file=sys.stderr)
-        print(f"  {sys.argv[0]} conv<seg_file> <vocab_file> <output> [--min-df 10] [--min-len 2] [--min-score 1.0] [--min-uniq 10]", file=sys.stderr)
+        print(f"  {sys.argv[0]} count <seg_file> <output>", file=sys.stderr)
+        print(f"  {sys.argv[0]} conv <seg_file> <vocab_file> <output> [--min-df 10] [--min-len 2] [--min-score 1.0] [--min-uniq 10] [--allowed-vocab map]", file=sys.stderr)
         sys.exit(1)
 
     cmd = sys.argv[1]
 
     if cmd == "count":
         if len(sys.argv) < 4:
-            print(f"Usage: {sys.argv[0]} count<seg_file> <output>", file=sys.stderr)
+            print(f"Usage: {sys.argv[0]} count <seg_file> <output>", file=sys.stderr)
             sys.exit(1)
         vocab(sys.argv[2], sys.argv[3])
 
     elif cmd == "conv":
         if len(sys.argv) < 5:
-            print(f"Usage: {sys.argv[0]} conv<seg_file> <vocab_file> <output> [--min-df 10] [--min-len 2] [--min-score 1.0] [--min-uniq 10]", file=sys.stderr)
+            print(f"Usage: {sys.argv[0]} conv <seg_file> <vocab_file> <output> [--min-df 10] [--min-len 2] [--min-score 1.0] [--min-uniq 10] [--allowed-vocab map]", file=sys.stderr)
             sys.exit(1)
         seg_file = sys.argv[2]
         vocab_file = sys.argv[3]
@@ -120,6 +138,7 @@ def main():
         min_len = 2
         min_score = 1.0
         min_uniq = 10
+        allowed_vocab = None
         i = 5
         while i < len(sys.argv):
             if sys.argv[i] == "--min-df" and i + 1 < len(sys.argv):
@@ -130,9 +149,20 @@ def main():
                 min_score = float(sys.argv[i + 1]); i += 2
             elif sys.argv[i] == "--min-uniq" and i + 1 < len(sys.argv):
                 min_uniq = int(sys.argv[i + 1]); i += 2
+            elif sys.argv[i] == "--allowed-vocab" and i + 1 < len(sys.argv):
+                allowed_vocab = sys.argv[i + 1]; i += 2
             else:
                 i += 1
-        tfidf(seg_file, vocab_file, output_file, min_df, min_len, min_score, min_uniq)
+        tfidf(
+            seg_file,
+            vocab_file,
+            output_file,
+            min_df,
+            min_len,
+            min_score,
+            min_uniq,
+            allowed_vocab,
+        )
 
     else:
         print(f"Unknown command: {cmd}", file=sys.stderr)

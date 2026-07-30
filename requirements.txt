@@ -1,0 +1,7 @@
+# Runtime segmentation and its bundled Hugging Face model.
+wapic>=0.1.0
+wapic-cws-model>=0.1.0
+
+# Hugging Face corpus download and Parquet conversion.
+huggingface-hub>=0.23
+pyarrow>=15

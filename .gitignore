@@ -1,5 +1,5 @@
 # Build outputs
-build/
+build*/
 *.o
 
 # Model outputs
@@ -7,10 +7,22 @@ build/
 *.phi
 *.theta
 !data/semat.phi
+/scripts/output/
 
 # Intermediate data
 corpus_tfidf.txt
 word_topic_init.txt
+/data/downloads/
+/data/derived/
+/prepare/
+/scripts/News.dat.txt
+/scripts/count.txt
+
+# Python and local configuration
+__pycache__/
+*.py[cod]
+.venv/
+local.mk
 
 # Docs
 LDA.md
